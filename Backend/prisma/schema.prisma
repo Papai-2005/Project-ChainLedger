@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id           String  @id @default(cuid())
+  displayName  String  @db.VarChar(100)
+  email        String  @unique @db.VarChar(255)
+  passwordHash String
+  isActive     Boolean @default(true)
+
+  wallets      Wallet[]
+  transactions Transaction[]
+  auditLogs    AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Wallet {
+  id      String @id @default(cuid())
+  label   String @db.VarChar(100)
+  address String @db.VarChar(42)
+  network String @default("Ethereum") @db.VarChar(40)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  outgoingTransactions Transaction[] @relation("TransactionSourceWallet")
+  incomingTransactions Transaction[] @relation("TransactionDestinationWallet")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, address, network])
+  @@index([userId])
+}
+
+model Transaction {
+  id     String            @id @default(cuid())
+  type   TransactionType
+  status TransactionStatus @default(COMPLETED)
+
+  amount      Decimal @db.Decimal(36, 18)
+  currency    String  @default("INR") @db.VarChar(10)
+  description String? @db.VarChar(500)
+  reference   String? @db.VarChar(100)
+
+  occurredAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sourceWalletId String?
+  sourceWallet   Wallet? @relation("TransactionSourceWallet", fields: [sourceWalletId], references: [id], onDelete: Restrict)
+
+  destinationWalletId String?
+  destinationWallet   Wallet? @relation("TransactionDestinationWallet", fields: [destinationWalletId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, occurredAt])
+  @@index([sourceWalletId])
+  @@index([destinationWalletId])
+  @@index([status])
+}
+
+model AuditLog {
+  id         String  @id @default(cuid())
+  action     String  @db.VarChar(100)
+  entityType String  @db.VarChar(100)
+  entityId   String?
+  metadata   Json?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
