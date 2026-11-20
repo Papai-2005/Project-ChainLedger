@@ -1,3 +1,4 @@
+
 import { Worker } from "bullmq";
 import IORedis from "ioredis";
 import { env } from "../../config/env.js";
@@ -35,5 +36,26 @@ transactionWorker.on("completed", (job) => {
 transactionWorker.on("failed", (job, error) => {
   console.error(`Job ${job?.id} failed:`, error.message);
 });
+
+transactionWorker.on("error", (error) => {
+  console.error("Transaction worker error:", error);
+});
+
+async function shutdown(signal) {
+  console.log(`${signal} received. Closing transaction worker...`);
+
+  try {
+    await transactionWorker.close();
+    await connection.quit();
+    console.log("Transaction worker shut down successfully.");
+    process.exit(0);
+  } catch (error) {
+    console.error("Worker shutdown failed:", error);
+    process.exit(1);
+  }
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 console.log("Transaction worker is running...");
